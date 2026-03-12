@@ -1617,33 +1617,56 @@ function getWeekDateRange() {
 }
 
 // ── PDF GENERATION ─────────────────────────────────────────────────────────────
+
+// Helper: desenha checkbox como quadrado + texto (Helvetica não suporta ☐)
+function drawCheckbox(doc, x, y, text, fontSize = 8.5, textColor = [44, 44, 44]) {
+  const boxSize = 3.2;
+  const boxY = y - boxSize + 0.5;
+  doc.setDrawColor(138, 133, 120);
+  doc.setLineWidth(0.3);
+  doc.rect(x, boxY, boxSize, boxSize);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(fontSize);
+  doc.setTextColor(...textColor);
+  doc.text(text, x + boxSize + 2.5, y);
+}
+
 function downloadPDFMenu() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
   const dateRange = getWeekDateRange();
+  const pageW = 210;
+  const marginL = 15;
+  const marginR = 15;
+  const usableW = pageW - marginL - marginR;
 
-  // Title
+  // Barra decorativa no topo
+  doc.setFillColor(74, 124, 89);
+  doc.rect(0, 0, pageW, 3, "F");
+
+  // Título
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
+  doc.setFontSize(20);
   doc.setTextColor(74, 124, 89);
-  doc.text("Cardápio da Semana", 105, 20, { align: "center" });
+  doc.text("Cardápio da Semana", pageW / 2, 18, { align: "center" });
 
+  // Subtítulo + linha decorativa
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(138, 133, 120);
-  doc.text(dateRange, 105, 28, { align: "center" });
+  doc.text(dateRange, pageW / 2, 26, { align: "center" });
+  doc.setDrawColor(232, 237, 229);
+  doc.setLineWidth(0.5);
+  doc.line(marginL + 20, 30, pageW - marginR - 20, 30);
 
-  // Table rows
+  // Linhas da tabela
   const tableBody = CONFIG.days.map(day => {
     const dayState = appState.weekPlan[day];
-
     const formatMeal = (slots) => {
       if (!slots) return "—";
       const parts = [slots.protein, slots.side, slots.veggie].filter(Boolean);
-      return parts.length ? parts.join(" + ") : "—";
+      return parts.length ? parts.join("\n+ ") : "—";
     };
-
     const lunch = formatMeal(dayState.lunch);
     let dinner;
     if (!dayState.dinnerExpanded || !dayState.dinner) {
@@ -1651,8 +1674,8 @@ function downloadPDFMenu() {
     } else {
       dinner = formatMeal(dayState.dinner);
     }
-
-    return [day, lunch, dinner];
+    const shortDay = day.replace("-feira", "");
+    return [shortDay, lunch, dinner];
   });
 
   doc.autoTable({
@@ -1662,16 +1685,18 @@ function downloadPDFMenu() {
     styles: {
       font: "helvetica",
       fontSize: 9,
-      cellPadding: 4,
+      cellPadding: { top: 4, right: 4, bottom: 4, left: 4 },
       overflow: "linebreak",
       lineColor: [232, 237, 229],
-      lineWidth: 0.3
+      lineWidth: 0.3,
+      valign: "middle"
     },
     headStyles: {
       fillColor: [74, 124, 89],
       textColor: [255, 255, 255],
       fontStyle: "bold",
-      fontSize: 9
+      fontSize: 9,
+      halign: "center"
     },
     alternateRowStyles: {
       fillColor: [245, 243, 237]
@@ -1680,12 +1705,18 @@ function downloadPDFMenu() {
       textColor: [44, 44, 44]
     },
     columnStyles: {
-      0: { cellWidth: 35, fontStyle: "bold" },
-      1: { cellWidth: 80 },
-      2: { cellWidth: 80 }
+      0: { cellWidth: 28, fontStyle: "bold", halign: "center", fillColor: [232, 237, 229] },
+      1: { cellWidth: (usableW - 28) / 2 },
+      2: { cellWidth: (usableW - 28) / 2 }
     },
-    margin: { left: 15, right: 15 }
+    margin: { left: marginL, right: marginR },
+    tableLineColor: [232, 237, 229],
+    tableLineWidth: 0.3
   });
+
+  // Barra decorativa no rodapé
+  doc.setFillColor(74, 124, 89);
+  doc.rect(0, 294, pageW, 3, "F");
 
   doc.save(`cardapio-semana-${dateRange.replace(/[^0-9a-zA-Z]/g, "-")}.pdf`);
 }
@@ -1693,66 +1724,56 @@ function downloadPDFMenu() {
 function downloadPDFShopping() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
   const dateRange = getWeekDateRange();
-
-  // Title
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(74, 124, 89);
-  doc.text("Lista de Compras", 105, 18, { align: "center" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(138, 133, 120);
-  doc.text(`Semana ${dateRange}`, 105, 25, { align: "center" });
-
-  let y = 34;
-  const pageH = 280;
+  const pageW = 210;
   const marginL = 15;
   const marginR = 15;
-  const pageW = 210 - marginL - marginR;
+  const usableW = pageW - marginL - marginR;
+  const pageH = 280;
+  let y = 0;
 
-  // Section helper
-  const addSectionHeader = (title, color) => {
+  // Barra decorativa no topo
+  doc.setFillColor(74, 124, 89);
+  doc.rect(0, 0, pageW, 3, "F");
+
+  // Título
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(74, 124, 89);
+  doc.text("Lista de Compras", pageW / 2, 18, { align: "center" });
+
+  // Subtítulo + linha decorativa
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(138, 133, 120);
+  doc.text(`Semana ${dateRange}`, pageW / 2, 26, { align: "center" });
+  doc.setDrawColor(232, 237, 229);
+  doc.setLineWidth(0.5);
+  doc.line(marginL + 20, 30, pageW - marginR - 20, 30);
+
+  y = 38;
+
+  const addSectionHeader = (title, bgColor) => {
     if (y > pageH - 20) { doc.addPage(); y = 20; }
-    doc.setFillColor(...color);
-    doc.roundedRect(marginL, y, pageW, 8, 2, 2, "F");
+    doc.setFillColor(...bgColor);
+    doc.roundedRect(marginL, y, usableW, 8, 2, 2, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(255, 255, 255);
     doc.text(title, marginL + 4, y + 5.5);
-    y += 11;
+    y += 12;
   };
 
-  const addItem = (text, contextText = "") => {
-    if (y > pageH - 12) { doc.addPage(); y = 20; }
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(44, 44, 44);
-    doc.text("☐ " + text, marginL + 4, y);
-    y += 5;
-    if (contextText) {
-      doc.setFontSize(7.5);
-      doc.setTextColor(138, 133, 120);
-      doc.text(contextText, marginL + 10, y);
-      y += 4.5;
-    }
-    y += 1;
-  };
-
-  // Pantry section
+  // Seção de despensa
   addSectionHeader("CONFERE SE TEM EM CASA", [249, 166, 32]);
-  doc.setTextColor(44, 44, 44);
-  doc.setFontSize(8.5);
   CONFIG.pantryStaples.forEach(item => {
-    if (y > pageH - 12) { doc.addPage(); y = 20; }
-    doc.text("☐ " + item, marginL + 4, y);
+    if (y > pageH - 10) { doc.addPage(); y = 20; }
+    drawCheckbox(doc, marginL + 4, y, item);
     y += 6;
   });
-  y += 4;
+  y += 6;
 
-  // Shopping by store
+  // Itens por loja
   const shoppingData = buildShoppingData();
   if (Object.keys(shoppingData).length === 0) {
     doc.setFont("helvetica", "italic");
@@ -1761,15 +1782,25 @@ function downloadPDFShopping() {
     doc.text("Nenhum ingrediente no cardápio.", marginL + 4, y);
   } else {
     Object.entries(shoppingData).forEach(([store, items]) => {
-      const storeIcon = CONFIG.storeIcons[store] || "🛒";
-      addSectionHeader(`${store.toUpperCase()}`, [74, 124, 89]);
+      addSectionHeader(store.toUpperCase(), [74, 124, 89]);
       items.forEach(entry => {
+        if (y > pageH - 14) { doc.addPage(); y = 20; }
+        drawCheckbox(doc, marginL + 4, y, entry.item, 9, [44, 44, 44]);
+        y += 4.5;
         const contextStr = entry.contexts.map(c => c.label).join(", ");
-        addItem(entry.item, contextStr);
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7.5);
+        doc.setTextColor(138, 133, 120);
+        doc.text(contextStr, marginL + 10, y);
+        y += 6;
       });
-      y += 2;
+      y += 3;
     });
   }
+
+  // Barra decorativa no rodapé
+  doc.setFillColor(74, 124, 89);
+  doc.rect(0, 294, pageW, 3, "F");
 
   doc.save(`lista-compras-${dateRange.replace(/[^0-9a-zA-Z]/g, "-")}.pdf`);
 }
