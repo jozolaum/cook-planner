@@ -1346,8 +1346,9 @@ function showConfirm(title, text, onConfirm) {
   confirmCallback = onConfirm;
   document.getElementById("confirm-dialog").classList.add("visible");
   document.getElementById("confirm-ok-btn").onclick = () => {
+    const cb = confirmCallback;
     closeConfirm();
-    if (confirmCallback) confirmCallback();
+    if (cb) cb();
   };
 }
 
